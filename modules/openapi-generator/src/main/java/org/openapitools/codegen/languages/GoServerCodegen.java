@@ -31,6 +31,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static org.openapitools.codegen.utils.StringUtils.camelize;
 
@@ -314,6 +315,60 @@ public class GoServerCodegen extends AbstractGoCodegen {
                 continue;
             }
 
+            if (model.hasRequired) {
+                Set<String> ownVarBaseNames = model.vars.stream()
+                        .map(v -> v.baseName)
+                        .collect(Collectors.toSet());
+
+                // Own required fields plus inherited required fields from allOf parents that
+                // are not flattened into this struct. Inherited keys are presence-checked
+                // against the raw JSON map, then stripped before strict decode.
+                List<CodegenProperty> presenceCheckRequiredVars = new ArrayList<>();
+                for (CodegenProperty v : model.vars) {
+                    if (v.required && !v.isReadOnly) {
+                        presenceCheckRequiredVars.add(v);
+                    }
+                }
+                for (CodegenProperty v : model.requiredVars) {
+                    if (v.required && !v.isReadOnly && !ownVarBaseNames.contains(v.baseName)) {
+                        presenceCheckRequiredVars.add(v);
+                    }
+                }
+                model.vendorExtensions.put("presenceCheckRequiredVars", presenceCheckRequiredVars);
+                boolean hasPresenceCheckRequiredVars = !presenceCheckRequiredVars.isEmpty();
+                model.vendorExtensions.put("hasPresenceCheckRequiredVars", hasPresenceCheckRequiredVars);
+
+                if (hasPresenceCheckRequiredVars) {
+                    imports.add(createMapping("import", "bytes"));
+                    imports.add(createMapping("import", "encoding/json"));
+                }
+
+                List<String> allowedJsonKeys = new ArrayList<>();
+                for (CodegenProperty v : model.vars) {
+                    if (!v.isReadOnly) {
+                        allowedJsonKeys.add(v.baseName);
+                    }
+                }
+                model.vendorExtensions.put("allowedJsonKeys", allowedJsonKeys);
+                // Models with embedded parent structs (allOf) have valid JSON keys
+                // from the parent that the strict decoder already knows about via
+                // embedding, so we skip the key-filtering step and let the decoder
+                // reject truly unknown fields.
+                model.vendorExtensions.put("x-go-has-parent", model.parent != null);
+
+                boolean hasRequiredAssertVars = model.vars.stream()
+                        .anyMatch(v -> v.required && !v.isReadOnly && !v.isNullable
+                                && (v.isModel || v.isArray || v.isMap));
+                model.vendorExtensions.put("hasRequiredAssertVars", hasRequiredAssertVars);
+                if (hasRequiredAssertVars) {
+                    List<CodegenProperty> assertRequiredVars = model.vars.stream()
+                            .filter(v -> v.required && !v.isReadOnly && !v.isNullable
+                                    && (v.isModel || v.isArray || v.isMap))
+                            .collect(Collectors.toList());
+                    model.vendorExtensions.put("assertRequiredVars", assertRequiredVars);
+                }
+            }
+
             Boolean importErrors = false;
 
             for (CodegenProperty param : Iterables.concat(model.vars, model.allVars, model.requiredVars, model.optionalVars)) {
@@ -326,6 +381,7 @@ public class GoServerCodegen extends AbstractGoCodegen {
                 imports.add(createMapping("import", "errors"));
             }
         }
+
         return objs;
     }
 

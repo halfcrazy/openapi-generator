@@ -11,6 +11,11 @@
 package petstoreserver
 
 
+import (
+	"bytes"
+	"encoding/json"
+)
+
 
 
 // User - A User who is purchasing from the pet store
@@ -39,18 +44,83 @@ type User struct {
 	// An array 1-deep.
 	DeepSliceMap [][]AnObject `json:"deepSliceMap,omitempty"`
 }
+type _User User
 
-// AssertUserRequired checks if the required fields are not zero-ed
-func AssertUserRequired(obj User) error {
-	elements := map[string]interface{}{
-		"deepSliceModel": obj.DeepSliceModel,
+// UnmarshalJSON validates required property keys then unmarshals into User
+func (o *User) UnmarshalJSON(data []byte) (err error) {
+	// Presence is checked against own required fields and any inherited required
+	// fields from allOf parents that are not flattened into this struct. Only keys
+	// that map to struct fields are passed to the strict decoder.
+	requiredProperties := []string{
+		"deepSliceModel",
 	}
-	for name, el := range elements {
-		if isZero := IsZeroValue(el); isZero {
-			return &RequiredError{Field: name}
+
+	requiredNullableProperties := map[string]bool{
+		"deepSliceModel": true,
+	}
+
+	allowedJsonKeys := []string{
+		"id",
+		"username",
+		"firstName",
+		"lastName",
+		"email",
+		"password",
+		"phone",
+		"userStatus",
+		"deepSliceModel",
+		"deepSliceMap",
+	}
+
+	allProperties := make(map[string]interface{})
+
+	err = json.Unmarshal(data, &allProperties)
+
+	if err != nil {
+		return err
+	}
+
+	for _, requiredProperty := range requiredProperties {
+		value, exists := allProperties[requiredProperty]
+		if !exists {
+			return &RequiredError{Field: requiredProperty}
+		}
+		if value == nil && !requiredNullableProperties[requiredProperty] {
+			return &RequiredError{Field: requiredProperty}
 		}
 	}
 
+	var filteredData []byte
+	filteredProperties := make(map[string]interface{})
+	for _, allowedKey := range allowedJsonKeys {
+		if value, exists := allProperties[allowedKey]; exists {
+			filteredProperties[allowedKey] = value
+		}
+	}
+
+	filteredData, err = json.Marshal(filteredProperties)
+	if err != nil {
+		return err
+	}
+
+	varUser := _User{}
+
+	decoder := json.NewDecoder(bytes.NewReader(filteredData))
+	decoder.DisallowUnknownFields()
+	err = decoder.Decode(&varUser)
+
+	if err != nil {
+		return err
+	}
+
+	*o = User(varUser)
+
+	return nil
+}
+
+// AssertUserRequired checks complex required fields (models, arrays, maps) and embedded parents.
+// Primitive required fields are validated for JSON request bodies in UnmarshalJSON so zero values remain valid.
+func AssertUserRequired(obj User) error {
 	if obj.DeepSliceModel != nil {
 		if err := AssertRecurseInterfaceRequired(*obj.DeepSliceModel, AssertTagRequired); err != nil {
 			return err

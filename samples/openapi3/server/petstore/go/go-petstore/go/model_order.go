@@ -13,6 +13,8 @@ package petstoreserver
 
 import (
 	"time"
+	"bytes"
+	"encoding/json"
 )
 
 
@@ -34,19 +36,66 @@ type Order struct {
 
 	Comment *string `json:"comment"`
 }
+type _Order Order
 
-// AssertOrderRequired checks if the required fields are not zero-ed
-func AssertOrderRequired(obj Order) error {
-	elements := map[string]interface{}{
-		"comment": obj.Comment,
-		"requireTest": obj.RequireTest,
+// UnmarshalJSON validates required property keys then unmarshals into Order
+func (o *Order) UnmarshalJSON(data []byte) (err error) {
+	// Presence is checked against own required fields and any inherited required
+	// fields from allOf parents that are not flattened into this struct. Only keys
+	// that map to struct fields are passed to the strict decoder.
+	requiredProperties := []string{
+		"comment",
+		"requireTest",
 	}
-	for name, el := range elements {
-		if isZero := IsZeroValue(el); isZero {
-			return &RequiredError{Field: name}
+
+	requiredNullableProperties := map[string]bool{
+		"comment": true,
+		"requireTest": false,
+	}
+
+	allProperties := make(map[string]interface{})
+
+	err = json.Unmarshal(data, &allProperties)
+
+	if err != nil {
+		return err
+	}
+
+	for _, requiredProperty := range requiredProperties {
+		value, exists := allProperties[requiredProperty]
+		if !exists {
+			return &RequiredError{Field: requiredProperty}
+		}
+		if value == nil && !requiredNullableProperties[requiredProperty] {
+			return &RequiredError{Field: requiredProperty}
 		}
 	}
 
+	var filteredData []byte
+	// Parent struct fields are embedded; the strict decoder already knows them.
+	filteredData, err = json.Marshal(allProperties)
+	if err != nil {
+		return err
+	}
+
+	varOrder := _Order{}
+
+	decoder := json.NewDecoder(bytes.NewReader(filteredData))
+	decoder.DisallowUnknownFields()
+	err = decoder.Decode(&varOrder)
+
+	if err != nil {
+		return err
+	}
+
+	*o = Order(varOrder)
+
+	return nil
+}
+
+// AssertOrderRequired checks complex required fields (models, arrays, maps) and embedded parents.
+// Primitive required fields are validated for JSON request bodies in UnmarshalJSON so zero values remain valid.
+func AssertOrderRequired(obj Order) error {
 	return nil
 }
 

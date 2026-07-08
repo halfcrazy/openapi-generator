@@ -11,6 +11,11 @@
 package petstoreserver
 
 
+import (
+	"bytes"
+	"encoding/json"
+)
+
 
 
 // SpecialInfo - An order info for a pets from the pet store
@@ -22,18 +27,76 @@ type SpecialInfo struct {
 
 	Type string `json:"type,omitempty"`
 }
+type _SpecialInfo SpecialInfo
 
-// AssertSpecialInfoRequired checks if the required fields are not zero-ed
-func AssertSpecialInfoRequired(obj SpecialInfo) error {
-	elements := map[string]interface{}{
-		"requireTest": obj.RequireTest,
+// UnmarshalJSON validates required property keys then unmarshals into SpecialInfo
+func (o *SpecialInfo) UnmarshalJSON(data []byte) (err error) {
+	// Presence is checked against own required fields and any inherited required
+	// fields from allOf parents that are not flattened into this struct. Only keys
+	// that map to struct fields are passed to the strict decoder.
+	requiredProperties := []string{
+		"requireTest",
 	}
-	for name, el := range elements {
-		if isZero := IsZeroValue(el); isZero {
-			return &RequiredError{Field: name}
+
+	requiredNullableProperties := map[string]bool{
+		"requireTest": false,
+	}
+
+	allowedJsonKeys := []string{
+		"promotion",
+		"requireTest",
+		"type",
+	}
+
+	allProperties := make(map[string]interface{})
+
+	err = json.Unmarshal(data, &allProperties)
+
+	if err != nil {
+		return err
+	}
+
+	for _, requiredProperty := range requiredProperties {
+		value, exists := allProperties[requiredProperty]
+		if !exists {
+			return &RequiredError{Field: requiredProperty}
+		}
+		if value == nil && !requiredNullableProperties[requiredProperty] {
+			return &RequiredError{Field: requiredProperty}
 		}
 	}
 
+	var filteredData []byte
+	filteredProperties := make(map[string]interface{})
+	for _, allowedKey := range allowedJsonKeys {
+		if value, exists := allProperties[allowedKey]; exists {
+			filteredProperties[allowedKey] = value
+		}
+	}
+
+	filteredData, err = json.Marshal(filteredProperties)
+	if err != nil {
+		return err
+	}
+
+	varSpecialInfo := _SpecialInfo{}
+
+	decoder := json.NewDecoder(bytes.NewReader(filteredData))
+	decoder.DisallowUnknownFields()
+	err = decoder.Decode(&varSpecialInfo)
+
+	if err != nil {
+		return err
+	}
+
+	*o = SpecialInfo(varSpecialInfo)
+
+	return nil
+}
+
+// AssertSpecialInfoRequired checks complex required fields (models, arrays, maps) and embedded parents.
+// Primitive required fields are validated for JSON request bodies in UnmarshalJSON so zero values remain valid.
+func AssertSpecialInfoRequired(obj SpecialInfo) error {
 	return nil
 }
 

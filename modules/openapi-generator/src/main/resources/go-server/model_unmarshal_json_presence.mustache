@@ -1,0 +1,85 @@
+type _{{classname}} {{classname}}
+
+// UnmarshalJSON validates required property keys then unmarshals into {{classname}}
+func (o *{{classname}}) UnmarshalJSON(data []byte) (err error) {
+	// Presence is checked against own required fields and any inherited required
+	// fields from allOf parents that are not flattened into this struct. Only keys
+	// that map to struct fields are passed to the strict decoder.
+	requiredProperties := []string{
+{{#vendorExtensions.presenceCheckRequiredVars}}
+		"{{baseName}}",
+{{/vendorExtensions.presenceCheckRequiredVars}}
+	}
+
+	requiredNullableProperties := map[string]bool{
+{{#vendorExtensions.presenceCheckRequiredVars}}
+		"{{baseName}}": {{#isNullable}}true{{/isNullable}}{{^isNullable}}false{{/isNullable}},
+{{/vendorExtensions.presenceCheckRequiredVars}}
+	}
+
+	{{^vendorExtensions.x-go-has-parent}}
+	allowedJsonKeys := []string{
+{{#vendorExtensions.allowedJsonKeys}}
+		"{{.}}",
+{{/vendorExtensions.allowedJsonKeys}}
+	}
+
+	{{/vendorExtensions.x-go-has-parent}}
+	allProperties := make(map[string]interface{})
+
+	err = json.Unmarshal(data, &allProperties)
+
+	if err != nil {
+		return err
+	}
+
+	for _, requiredProperty := range requiredProperties {
+		value, exists := allProperties[requiredProperty]
+		if !exists {
+			return &RequiredError{Field: requiredProperty}
+		}
+		if value == nil && !requiredNullableProperties[requiredProperty] {
+			return &RequiredError{Field: requiredProperty}
+		}
+	}
+
+	var filteredData []byte
+	{{#vendorExtensions.x-go-has-parent}}
+	// Parent struct fields are embedded; the strict decoder already knows them.
+	filteredData, err = json.Marshal(allProperties)
+	{{/vendorExtensions.x-go-has-parent}}
+	{{^vendorExtensions.x-go-has-parent}}
+	{{#isAdditionalPropertiesTrue}}
+	filteredData, err = json.Marshal(allProperties)
+	{{/isAdditionalPropertiesTrue}}
+	{{^isAdditionalPropertiesTrue}}
+	filteredProperties := make(map[string]interface{})
+	for _, allowedKey := range allowedJsonKeys {
+		if value, exists := allProperties[allowedKey]; exists {
+			filteredProperties[allowedKey] = value
+		}
+	}
+
+	filteredData, err = json.Marshal(filteredProperties)
+	{{/isAdditionalPropertiesTrue}}
+	{{/vendorExtensions.x-go-has-parent}}
+	if err != nil {
+		return err
+	}
+
+	var{{classname}} := _{{classname}}{}
+
+	decoder := json.NewDecoder(bytes.NewReader(filteredData))
+	{{^isAdditionalPropertiesTrue}}
+	decoder.DisallowUnknownFields()
+	{{/isAdditionalPropertiesTrue}}
+	err = decoder.Decode(&var{{classname}})
+
+	if err != nil {
+		return err
+	}
+
+	*o = {{classname}}(var{{classname}})
+
+	return nil
+}

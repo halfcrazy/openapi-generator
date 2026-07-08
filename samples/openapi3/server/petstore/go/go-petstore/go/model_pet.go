@@ -11,6 +11,11 @@
 package petstoreserver
 
 
+import (
+	"bytes"
+	"encoding/json"
+)
+
 
 
 // Pet - A pet for sale in the pet store
@@ -30,19 +35,81 @@ type Pet struct {
 	// Deprecated
 	Status string `json:"status,omitempty"`
 }
+type _Pet Pet
 
-// AssertPetRequired checks if the required fields are not zero-ed
-func AssertPetRequired(obj Pet) error {
-	elements := map[string]interface{}{
-		"name": obj.Name,
-		"photoUrls": obj.PhotoUrls,
+// UnmarshalJSON validates required property keys then unmarshals into Pet
+func (o *Pet) UnmarshalJSON(data []byte) (err error) {
+	// Presence is checked against own required fields and any inherited required
+	// fields from allOf parents that are not flattened into this struct. Only keys
+	// that map to struct fields are passed to the strict decoder.
+	requiredProperties := []string{
+		"name",
+		"photoUrls",
 	}
-	for name, el := range elements {
-		if isZero := IsZeroValue(el); isZero {
-			return &RequiredError{Field: name}
+
+	requiredNullableProperties := map[string]bool{
+		"name": false,
+		"photoUrls": true,
+	}
+
+	allowedJsonKeys := []string{
+		"id",
+		"category",
+		"name",
+		"photoUrls",
+		"tags",
+		"status",
+	}
+
+	allProperties := make(map[string]interface{})
+
+	err = json.Unmarshal(data, &allProperties)
+
+	if err != nil {
+		return err
+	}
+
+	for _, requiredProperty := range requiredProperties {
+		value, exists := allProperties[requiredProperty]
+		if !exists {
+			return &RequiredError{Field: requiredProperty}
+		}
+		if value == nil && !requiredNullableProperties[requiredProperty] {
+			return &RequiredError{Field: requiredProperty}
 		}
 	}
 
+	var filteredData []byte
+	filteredProperties := make(map[string]interface{})
+	for _, allowedKey := range allowedJsonKeys {
+		if value, exists := allProperties[allowedKey]; exists {
+			filteredProperties[allowedKey] = value
+		}
+	}
+
+	filteredData, err = json.Marshal(filteredProperties)
+	if err != nil {
+		return err
+	}
+
+	varPet := _Pet{}
+
+	decoder := json.NewDecoder(bytes.NewReader(filteredData))
+	decoder.DisallowUnknownFields()
+	err = decoder.Decode(&varPet)
+
+	if err != nil {
+		return err
+	}
+
+	*o = Pet(varPet)
+
+	return nil
+}
+
+// AssertPetRequired checks complex required fields (models, arrays, maps) and embedded parents.
+// Primitive required fields are validated for JSON request bodies in UnmarshalJSON so zero values remain valid.
+func AssertPetRequired(obj Pet) error {
 	if obj.Category != nil {
 		if err := AssertCategoryRequired(*obj.Category); err != nil {
 			return err
